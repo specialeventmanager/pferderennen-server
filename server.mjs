@@ -5,18 +5,16 @@ import * as cheerio from "cheerio";
 
 const app = express();
 
-// ================= BASIS =================
 app.use(cors());
 app.use(express.json());
 
-// ✅ RAM Speicher
 let savedData = {
   tips: {},
   banker: {}
 };
 
 
-// ================= RACES (DYNAMISCH + RICHTIG) =================
+// ================= RACES (FINAL FIX – dynamisch & korrekt) =================
 app.get("/api/races", async (req, res) => {
   try {
     const url = "https://www.deutscher-galopp.de/gr/renntage/37578537/?d=20260514";
@@ -26,14 +24,15 @@ app.get("/api/races", async (req, res) => {
 
     const races = [];
 
-    // ✅ NUR die Navigation oben auswählen (SEHR WICHTIG!)
-    $(".rennlist a").each((_, el) => {
-      const href = $(el).attr("href") || "";
+    // ✅ WICHTIG: gezielt Navigationsstruktur auswählen
+    $(".nav-tabs a").each((_, el) => {
+
       const text = $(el).text().trim();
+      const href = $(el).attr("href") || "";
 
       const match = href.match(/id=(\d+)/);
 
-      if (match && text.match(/Rennen\\s*\\d+/)) {
+      if (match && text.match(/Rennen\s*\d+/)) {
         races.push({
           id: match[1],
           name: text
@@ -41,18 +40,18 @@ app.get("/api/races", async (req, res) => {
       }
     });
 
-    console.log("✅ Rennen:", races);
+    console.log("✅ Rennen korrekt extrahiert:", races);
 
     res.json(races);
 
   } catch (e) {
-    console.error("❌ races error:", e);
+    console.error("❌ Fehler races:", e);
     res.status(500).json({ error: "Fehler Rennen laden" });
   }
 });
 
 
-// ================= STARTERS (ROBUST) =================
+// ================= STARTERS =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
     const url =
@@ -71,13 +70,8 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
         if (
           name &&
-          name !== "-" &&
           name.length > 2 &&
-          !name.toLowerCase().includes("nr") &&
-          !name.toLowerCase().includes("gewicht") &&
-          !name.toLowerCase().includes("trainer") &&
-          !name.toLowerCase().includes("besitzer") &&
-          !name.match(/^\\d+$/) &&
+          !name.match(/^\d+$/) &&
           !starters.includes(name)
         ) {
           starters.push(name);
@@ -85,16 +79,14 @@ app.get("/api/starters/:raceId", async (req, res) => {
       }
     });
 
-    console.log(`✅ Starter ${req.params.raceId}:`, starters);
-
     res.json({
       raceId: req.params.raceId,
       starters
     });
 
   } catch (err) {
-    console.error("❌ Starter Fehler:", err);
-    res.status(500).json({ error: "Fehler beim Laden der Starter" });
+    console.error(err);
+    res.status(500).json({ error: "Fehler Starter" });
   }
 });
 
@@ -119,8 +111,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
       if (pos === "1.") {
         winner = cells.find("a[href*='/pferde/']").text().trim();
-        winOdds =
-          parseFloat(cells.eq(10).text().replace(",", ".")) || 0;
+        winOdds = parseFloat(cells.eq(10).text().replace(",", ".")) || 0;
       }
 
       if (pos === "2." || pos === "3.") {
@@ -129,8 +120,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
 
       if (["1.", "2.", "3."].includes(pos)) {
-        const pq =
-          parseFloat(cells.eq(11).text().replace(",", ".")) || 0;
+        const pq = parseFloat(cells.eq(11).text().replace(",", ".")) || 0;
         if (pq) placeOdds = pq;
       }
     });
@@ -144,22 +134,15 @@ app.get("/api/results/:raceId", async (req, res) => {
     });
 
   } catch (e) {
-    console.error("❌ Ergebnis Fehler:", e);
-    res.status(500).json({ error: "Fehler Ergebnisse laden" });
+    res.status(500).json({ error: "Fehler Ergebnisse" });
   }
 });
 
 
 // ================= SAVE =================
 app.post("/api/saveTips", (req, res) => {
-  try {
-    savedData = req.body;
-    console.log("💾 Tipps gespeichert");
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Speichern fehlgeschlagen" });
-  }
+  savedData = req.body;
+  res.json({ status: "ok" });
 });
 
 
@@ -169,9 +152,9 @@ app.get("/api/loadTips", (req, res) => {
 });
 
 
-// ================= SERVER START =================
+// ================= START =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`✅ Server läuft auf Port ${PORT}`);
+  console.log("✅ Server läuft");
 });
