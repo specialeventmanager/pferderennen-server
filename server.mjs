@@ -1,14 +1,15 @@
 
 import express from "express";
-import * as cheerio from "cheerio";
 import cors from "cors";
+import * as cheerio from "cheerio";
 
 const app = express();
 
+// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ Speicher im RAM
+// ✅ RAM Speicher (für Multiplayer)
 let savedData = {
   tips: {},
   banker: {}
@@ -25,17 +26,16 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     const starters = [];
 
-    $("table tr").each((_, row) => {
-      const cells = $(row).find("td");
-      if (cells.length > 1) {
-        const name = cells.eq(1).text().trim();
-        if (name && name !== "-") {
-          starters.push(name);
-        }
-      }
+    // ✅ robust via Link zur Pferdeseite
+    $("tr").each((_, row) => {
+      const horse = $(row).find("a[href*='/pferde/']").text().trim();
+      if (horse) starters.push(horse);
     });
 
-    res.json({ raceId: req.params.raceId, starters });
+    res.json({
+      raceId: req.params.raceId,
+      starters
+    });
 
   } catch (err) {
     console.error(err);
@@ -76,7 +76,13 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    res.json({ raceId: req.params.raceId, winner, placed, winOdds, placeOdds });
+    res.json({
+      raceId: req.params.raceId,
+      winner,
+      placed,
+      winOdds,
+      placeOdds
+    });
 
   } catch (e) {
     console.error(e);
@@ -84,7 +90,7 @@ app.get("/api/results/:raceId", async (req, res) => {
   }
 });
 
-// ================= RACES =================
+// ================= RACES (WICHTIG FIX!) =================
 app.get("/api/races", async (req, res) => {
   try {
     const url = "https://www.deutscher-galopp.de/gr/renntage/37578537/?d=20260514";
@@ -94,15 +100,25 @@ app.get("/api/races", async (req, res) => {
 
     const races = [];
 
-    $("a[href*='rennen.php?id=']").each((_, el) => {
-      const href = $(el).attr("href");
-      const name = $(el).text().trim();
-      const match = href.match(/id=(\\d+)/);
+    $("a").each((_, el) => {
+      const href = $(el).attr("href") || "";
 
-      if (match) {
-        races.push({ id: match[1], name });
+      if (href.includes("rennen.php?id=")) {
+
+        const match = href.match(/id=(\d+)/);
+        const name = $(el).text().trim();
+
+        // ✅ nur echte Rennen filtern
+        if (match && name && name.toLowerCase().includes("rennen")) {
+          races.push({
+            id: match[1],
+            name: name
+          });
+        }
       }
     });
+
+    console.log("✅ Rennen gefunden:", races.length);
 
     res.json(races);
 
@@ -116,8 +132,10 @@ app.get("/api/races", async (req, res) => {
 app.post("/api/saveTips", (req, res) => {
   try {
     savedData = req.body;
+    console.log("💾 gespeicherte Tipps");
     res.json({ status: "ok" });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "Speichern fehlgeschlagen" });
   }
 });
