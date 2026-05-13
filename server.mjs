@@ -5,11 +5,11 @@ import * as cheerio from "cheerio";
 
 const app = express();
 
-// ✅ Middleware
+// ================= BASIC SETUP =================
 app.use(cors());
 app.use(express.json());
 
-// ✅ RAM Speicher (für Multiplayer)
+// ✅ RAM Speicher (Multiplayer)
 let savedData = {
   tips: {},
   banker: {}
@@ -18,8 +18,7 @@ let savedData = {
 
 
 
-// ================= RACES (FIX & STABIL) =================
-// ✅ KEIN Scraping mehr → stabile Reihenfolge + korrekte IDs
+// ================= RACES (FIXED + STABIL) =================
 app.get("/api/races", (req, res) => {
 
   const races = [
@@ -33,13 +32,14 @@ app.get("/api/races", (req, res) => {
     { name: "Rennen 8", id: "1364744" }
   ];
 
+  console.log("✅ Rennen geliefert:", races.length);
   res.json(races);
 });
 
 
 
 
-// ================= STARTERS =================
+// ================= STARTERS (FINAL FIX) =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
     const url =
@@ -50,13 +50,26 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     const starters = [];
 
-    // ✅ robust über Pferdelinks
-    $("a[href*='/pferde/']").each((_, el) => {
-      const name = $(el).text().trim();
-      if (name && !starters.includes(name)) {
-        starters.push(name);
+    // ✅ robuster Tabellen-Parser
+    $("table tr").each((_, row) => {
+      const cells = $(row).find("td");
+
+      if (cells.length > 2) {
+        const name = cells.eq(1).text().trim();
+
+        // ✅ nur echte Pferdenamen
+        if (
+          name &&
+          name !== "-" &&
+          !name.toLowerCase().includes("nr") &&
+          !starters.includes(name)
+        ) {
+          starters.push(name);
+        }
       }
     });
+
+    console.log(`✅ Starter für ${req.params.raceId}:`, starters.length);
 
     res.json({
       raceId: req.params.raceId,
@@ -64,7 +77,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ Starter Fehler:", err);
     res.status(500).json({ error: "Fehler beim Laden der Starter" });
   }
 });
@@ -92,17 +105,23 @@ app.get("/api/results/:raceId", async (req, res) => {
 
       if (pos === "1.") {
         winner = cells.find("a[href*='/pferde/']").text().trim();
-        winOdds = parseFloat(cells.eq(10).text().replace(",", ".")) || 0;
+        winOdds = parseFloat(
+          cells.eq(10).text().replace(",", ".")
+        ) || 0;
       }
 
       if (pos === "2." || pos === "3.") {
-        const name = cells.find("a[href*='/pferde/']").text().trim();
+        const name = cells
+          .find("a[href*='/pferde/']")
+          .text()
+          .trim();
         if (name) placed.push(name);
       }
 
       if (["1.", "2.", "3."].includes(pos)) {
-        const pq =
-          parseFloat(cells.eq(11).text().replace(",", ".")) || 0;
+        const pq = parseFloat(
+          cells.eq(11).text().replace(",", ".")
+        ) || 0;
         if (pq) placeOdds = pq;
       }
     });
@@ -116,7 +135,7 @@ app.get("/api/results/:raceId", async (req, res) => {
     });
 
   } catch (e) {
-    console.error(e);
+    console.error("❌ Ergebnis Fehler:", e);
     res.status(500).json({ error: "Fehler Ergebnisse laden" });
   }
 });
@@ -147,7 +166,7 @@ app.get("/api/loadTips", (req, res) => {
 
 
 
-// ================= START SERVER =================
+// ================= START =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
