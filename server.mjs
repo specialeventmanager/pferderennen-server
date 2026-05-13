@@ -9,53 +9,66 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ RAM-Speicher für Tipps
+// ✅ RAM Speicher
 let savedData = {
   tips: {},
   banker: {}
 };
 
 
+// ================= RACES (DYNAMISCH + RICHTIG) =================
+app.get("/api/races", async (req, res) => {
+  try {
+    const url = "https://www.deutscher-galopp.de/gr/renntage/37578537/?d=20260514";
 
-// ================= RACES =================
-// ✅ feste, korrekte IDs + richtige Reihenfolge
-app.get("/api/races", (req, res) => {
-  const races = [
-    { name: "Rennen 1", id: "1364737" },
-    { name: "Rennen 2", id: "1364738" },
-    { name: "Rennen 3", id: "1364739" },
-    { name: "Rennen 4", id: "1364740" },
-    { name: "Rennen 5", id: "1364741" },
-    { name: "Rennen 6", id: "1364742" },
-    { name: "Rennen 7", id: "1364743" },
-    { name: "Rennen 8", id: "1364744" }
-  ];
+    const html = await fetch(url).then(r => r.text());
+    const $ = cheerio.load(html);
 
-  console.log("✅ Rennen geliefert:", races.length);
-  res.json(races);
+    const races = [];
+
+    // ✅ NUR die Navigation oben auswählen (SEHR WICHTIG!)
+    $(".rennlist a").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      const text = $(el).text().trim();
+
+      const match = href.match(/id=(\d+)/);
+
+      if (match && text.match(/Rennen\\s*\\d+/)) {
+        races.push({
+          id: match[1],
+          name: text
+        });
+      }
+    });
+
+    console.log("✅ Rennen:", races);
+
+    res.json(races);
+
+  } catch (e) {
+    console.error("❌ races error:", e);
+    res.status(500).json({ error: "Fehler Rennen laden" });
+  }
 });
 
 
-
-// ================= STARTERS (FINAL FIX) =================
+// ================= STARTERS (ROBUST) =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
-    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url =
+      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
 
     const starters = [];
 
-    // ✅ ROBUSTESTE Lösung:
-    // Pferdenamen stehen IMMER als erste Spalte in Starter-Tabelle
     $("table tr").each((_, row) => {
       const cells = $(row).find("td");
 
-      if (cells.length > 3) {
+      if (cells.length > 2) {
         const name = cells.eq(1).text().trim();
 
-        // ✅ harte Filter → nur echte Pferde
         if (
           name &&
           name !== "-" &&
@@ -64,7 +77,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
           !name.toLowerCase().includes("gewicht") &&
           !name.toLowerCase().includes("trainer") &&
           !name.toLowerCase().includes("besitzer") &&
-          !name.match(/^\d+$/) &&
+          !name.match(/^\\d+$/) &&
           !starters.includes(name)
         ) {
           starters.push(name);
@@ -72,7 +85,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
       }
     });
 
-    console.log(`✅ Starter ${req.params.raceId}:`, starters.length);
+    console.log(`✅ Starter ${req.params.raceId}:`, starters);
 
     res.json({
       raceId: req.params.raceId,
@@ -86,11 +99,11 @@ app.get("/api/starters/:raceId", async (req, res) => {
 });
 
 
-
 // ================= RESULTS =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
-    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url =
+      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -137,7 +150,6 @@ app.get("/api/results/:raceId", async (req, res) => {
 });
 
 
-
 // ================= SAVE =================
 app.post("/api/saveTips", (req, res) => {
   try {
@@ -151,12 +163,10 @@ app.post("/api/saveTips", (req, res) => {
 });
 
 
-
 // ================= LOAD =================
 app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
-
 
 
 // ================= SERVER START =================
