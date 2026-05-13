@@ -5,11 +5,10 @@ import * as cheerio from "cheerio";
 
 const app = express();
 
-// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ RAM Speicher (für Multiplayer)
+// ✅ RAM Speicher (für Tipps)
 let savedData = {
   tips: {},
   banker: {}
@@ -20,16 +19,17 @@ app.get("/api/starters/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
-    const response = await fetch(url);
-    const html = await response.text();
+    const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
 
     const starters = [];
 
-    // ✅ robust via Link zur Pferdeseite
-    $("tr").each((_, row) => {
-      const horse = $(row).find("a[href*='/pferde/']").text().trim();
-      if (horse) starters.push(horse);
+    // ✅ robust: alle Pferdelinks sammeln
+    $("a[href*='/pferde/']").each((_, el) => {
+      const name = $(el).text().trim();
+      if (name && !starters.includes(name)) {
+        starters.push(name);
+      }
     });
 
     res.json({
@@ -90,7 +90,7 @@ app.get("/api/results/:raceId", async (req, res) => {
   }
 });
 
-// ================= RACES (WICHTIG FIX!) =================
+// ================= RACES (FIXED) =================
 app.get("/api/races", async (req, res) => {
   try {
     const url = "https://www.deutscher-galopp.de/gr/renntage/37578537/?d=20260514";
@@ -100,27 +100,31 @@ app.get("/api/races", async (req, res) => {
 
     const races = [];
 
-    $("a").each((_, el) => {
+    // ✅ nur echte Renn-Links
+    $("a[href*='rennen.php?id=']").each((_, el) => {
       const href = $(el).attr("href") || "";
+      const text = $(el).text().trim();
 
-      if (href.includes("rennen.php?id=")) {
+      const match = href.match(/id=(\d+)/);
 
-        const match = href.match(/id=(\d+)/);
-        const name = $(el).text().trim();
-
-        // ✅ nur echte Rennen filtern
-        if (match && name && name.toLowerCase().includes("rennen")) {
-          races.push({
-            id: match[1],
-            name: name
-          });
-        }
+      if (match && text.startsWith("Rennen")) {
+        races.push({
+          id: match[1],
+          name: text
+        });
       }
     });
 
-    console.log("✅ Rennen gefunden:", races.length);
+    // ✅ richtige Reihenfolge (Rennen 1–8)
+    races.sort((a, b) => {
+      const aNr = parseInt(a.name.replace(/\D/g, ""));
+      const bNr = parseInt(b.name.replace(/\D/g, ""));
+      return aNr - bNr;
+    });
 
-    res.json(races);
+    console.log("✅ Rennen:", races.length);
+
+    res.json(races.slice(0, 8));
 
   } catch (e) {
     console.error(e);
@@ -132,7 +136,7 @@ app.get("/api/races", async (req, res) => {
 app.post("/api/saveTips", (req, res) => {
   try {
     savedData = req.body;
-    console.log("💾 gespeicherte Tipps");
+    console.log("💾 Tipps gespeichert");
     res.json({ status: "ok" });
   } catch (e) {
     console.error(e);
@@ -151,3 +155,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server läuft auf Port ${PORT}`);
 });
+``
