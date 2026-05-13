@@ -8,54 +8,77 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ✅ Multiplayer Speicher
 let savedData = {
   tips: {},
   banker: {}
 };
 
 
-// ================= RACES (FINAL FIX – dynamisch & korrekt) =================
+
+// ================= RACES (FINAL – stabil & korrekt) =================
 app.get("/api/races", async (req, res) => {
   try {
-    const url = "https://www.deutscher-galopp.de/gr/renntage/37578537/?d=20260514";
-
-    const html = await fetch(url).then(r => r.text());
-    const $ = cheerio.load(html);
+    // 👉 bekannte ID-Range des Renntags
+    const possibleIds = [
+      "1364737","1364738","1364739","1364740",
+      "1364741","1364742","1364743","1364744",
+      "1364745","1364746","1364747"
+    ];
 
     const races = [];
 
-    // ✅ WICHTIG: gezielt Navigationsstruktur auswählen
-    $(".nav-tabs a").each((_, el) => {
+    for (let id of possibleIds) {
 
-      const text = $(el).text().trim();
-      const href = $(el).attr("href") || "";
+      const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${id}&d=20260514&s=S`;
 
-      const match = href.match(/id=(\d+)/);
+      const html = await fetch(url).then(r => r.text());
+      const $ = cheerio.load(html);
 
-      if (match && text.match(/Rennen\s*\d+/)) {
-        races.push({
-          id: match[1],
-          name: text
-        });
+      // ✅ Prüfung: hat das Rennen echte Starter?
+      const name = $("h1").text().trim();
+      const hasStarter = $("table tr td").length > 8;
+
+      if (hasStarter && name.toLowerCase().includes("rennen")) {
+
+        // ✅ Rennnummer extrahieren
+        const match = name.match(/Rennen\s*(\d+)/);
+
+        if (match) {
+          races.push({
+            id: id,
+            name: `Rennen ${match[1]}`,
+            order: parseInt(match[1])
+          });
+        }
       }
-    });
+    }
 
-    console.log("✅ Rennen korrekt extrahiert:", races);
+    // ✅ richtige Reihenfolge sicherstellen
+    races.sort((a, b) => a.order - b.order);
 
-    res.json(races);
+    const final = races.map(r => ({
+      id: r.id,
+      name: r.name
+    }));
+
+    console.log("✅ Rennen final:", final);
+
+    res.json(final);
 
   } catch (e) {
-    console.error("❌ Fehler races:", e);
+    console.error("❌ races error:", e);
     res.status(500).json({ error: "Fehler Rennen laden" });
   }
 });
 
 
+
+
 // ================= STARTERS =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
-    const url =
-      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -70,8 +93,12 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
         if (
           name &&
+          name !== "-" &&
           name.length > 2 &&
           !name.match(/^\d+$/) &&
+          !name.toLowerCase().includes("nr") &&
+          !name.toLowerCase().includes("gewicht") &&
+          !name.toLowerCase().includes("trainer") &&
           !starters.includes(name)
         ) {
           starters.push(name);
@@ -79,23 +106,26 @@ app.get("/api/starters/:raceId", async (req, res) => {
       }
     });
 
+    console.log(`✅ Starter ${req.params.raceId}:`, starters.length);
+
     res.json({
       raceId: req.params.raceId,
       starters
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ Starter Fehler:", err);
     res.status(500).json({ error: "Fehler Starter" });
   }
 });
 
 
+
+
 // ================= RESULTS =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
-    const url =
-      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -134,16 +164,22 @@ app.get("/api/results/:raceId", async (req, res) => {
     });
 
   } catch (e) {
+    console.error("❌ Ergebnis Fehler:", e);
     res.status(500).json({ error: "Fehler Ergebnisse" });
   }
 });
 
 
+
+
 // ================= SAVE =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
+  console.log("💾 Tipps gespeichert");
   res.json({ status: "ok" });
 });
+
+
 
 
 // ================= LOAD =================
@@ -152,9 +188,11 @@ app.get("/api/loadTips", (req, res) => {
 });
 
 
+
+
 // ================= START =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("✅ Server läuft");
+  console.log("✅ Server läuft auf Port", PORT);
 });
