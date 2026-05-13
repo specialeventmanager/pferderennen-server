@@ -5,10 +5,11 @@ import * as cheerio from "cheerio";
 
 const app = express();
 
+// ================= BASIS =================
 app.use(cors());
 app.use(express.json());
 
-// ✅ Multiplayer Speicher (RAM)
+// ✅ RAM-Speicher für Tipps
 let savedData = {
   tips: {},
   banker: {}
@@ -16,10 +17,9 @@ let savedData = {
 
 
 
-
-// ✅ RICHTIGE RENNEN MIT KORREKTER ID-ZUORDNUNG
+// ================= RACES =================
+// ✅ feste, korrekte IDs + richtige Reihenfolge
 app.get("/api/races", (req, res) => {
-
   const races = [
     { name: "Rennen 1", id: "1364737" },
     { name: "Rennen 2", id: "1364738" },
@@ -31,36 +31,40 @@ app.get("/api/races", (req, res) => {
     { name: "Rennen 8", id: "1364744" }
   ];
 
-  console.log("✅ Rennen geliefert:", races);
+  console.log("✅ Rennen geliefert:", races.length);
   res.json(races);
 });
 
 
 
-
-// ✅ STARTER – KORREKT PRO RENNEN
+// ================= STARTERS (FINAL FIX) =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
-    const url =
-      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
 
     const starters = [];
 
+    // ✅ ROBUSTESTE Lösung:
+    // Pferdenamen stehen IMMER als erste Spalte in Starter-Tabelle
     $("table tr").each((_, row) => {
       const cells = $(row).find("td");
 
-      // ✅ nur echte Starter-Zeilen
-      if (cells.length > 2) {
+      if (cells.length > 3) {
         const name = cells.eq(1).text().trim();
 
+        // ✅ harte Filter → nur echte Pferde
         if (
           name &&
           name !== "-" &&
+          name.length > 2 &&
           !name.toLowerCase().includes("nr") &&
-          !name.toLowerCase().includes("nummer") &&
+          !name.toLowerCase().includes("gewicht") &&
+          !name.toLowerCase().includes("trainer") &&
+          !name.toLowerCase().includes("besitzer") &&
+          !name.match(/^\d+$/) &&
           !starters.includes(name)
         ) {
           starters.push(name);
@@ -68,7 +72,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
       }
     });
 
-    console.log(`✅ Starter für ${req.params.raceId}:`, starters.length);
+    console.log(`✅ Starter ${req.params.raceId}:`, starters.length);
 
     res.json({
       raceId: req.params.raceId,
@@ -83,12 +87,10 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
 
 
-
-// ✅ ERGEBNISSE
+// ================= RESULTS =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
-    const url =
-      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -136,12 +138,11 @@ app.get("/api/results/:raceId", async (req, res) => {
 
 
 
-
-// ✅ TIPPS SPEICHERN
+// ================= SAVE =================
 app.post("/api/saveTips", (req, res) => {
   try {
     savedData = req.body;
-    console.log("💾 Tipps gespeichert:", savedData);
+    console.log("💾 Tipps gespeichert");
     res.json({ status: "ok" });
   } catch (e) {
     console.error(e);
@@ -151,16 +152,14 @@ app.post("/api/saveTips", (req, res) => {
 
 
 
-
-// ✅ TIPPS LADEN
+// ================= LOAD =================
 app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
 
 
 
-
-// ✅ SERVER START
+// ================= SERVER START =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
