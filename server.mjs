@@ -5,6 +5,7 @@ import * as cheerio from "cheerio";
 
 const app = express();
 
+// ================= BASIS =================
 app.use(cors());
 app.use(express.json());
 
@@ -30,7 +31,6 @@ app.get("/api/races", (req, res) => {
     { name: "Rennen 8", id: "1364743" }
   ];
 
-  console.log("✅ Rennen korrekt gesetzt");
   res.json(races);
 });
 
@@ -39,7 +39,8 @@ app.get("/api/races", (req, res) => {
 // ================= ✅ STARTER =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
-    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url =
+      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -65,8 +66,6 @@ app.get("/api/starters/:raceId", async (req, res) => {
       }
     });
 
-    console.log(`✅ Starter ${req.params.raceId}:`, starters.length);
-
     res.json({
       raceId: req.params.raceId,
       starters
@@ -80,35 +79,70 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
 
 
-// ================= ✅ ERGEBNISSE =================
+// ================= ✅ ERGEBNISSE (FINAL FIX) =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
-    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url =
+      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
 
     let winner = "";
     let placed = [];
+    let winOdds = 0;
+    let placeOdds = 0;
 
-    $("tr").each((_, row) => {
+    // ✅ richtige Tabelle finden (über Überschrift)
+    const header = $("h3:contains('STATUS: ERGEBNIS')");
+    const table = header.nextAll("table").first();
+
+    // ✅ fallback falls Struktur anders ist
+    const targetTable = table.length ? table : $("table").first();
+
+    targetTable.find("tr").each((_, row) => {
+
       const cells = $(row).find("td");
+      if (cells.length < 5) return;
+
       const pos = cells.eq(0).text().trim();
+      const horse = cells.eq(1).text().trim();
 
+      if (!horse) return;
+
+      // ✅ Sieger
       if (pos === "1.") {
-        winner = cells.find("a[href*='/pferde/']").text().trim();
+        winner = horse;
+
+        const text = $(row).text().replace(",", ".");
+        const nums = text.match(/\d+\.\d+/g) || [];
+
+        if (nums.length >= 2) {
+          winOdds = parseFloat(nums[nums.length - 2]) || 0;
+          placeOdds = parseFloat(nums[nums.length - 1]) || 0;
+        }
       }
 
+      // ✅ Platzierte
       if (pos === "2." || pos === "3.") {
-        const name = cells.find("a[href*='/pferde/']").text().trim();
-        if (name) placed.push(name);
+        placed.push(horse);
       }
+
+    });
+
+    console.log("✅ Ergebnis:", {
+      winner,
+      placed,
+      winOdds,
+      placeOdds
     });
 
     res.json({
       raceId: req.params.raceId,
       winner,
-      placed
+      placed,
+      winOdds,
+      placeOdds
     });
 
   } catch (e) {
@@ -122,7 +156,6 @@ app.get("/api/results/:raceId", async (req, res) => {
 // ================= ✅ SPEICHERN =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
-  console.log("💾 Tipps gespeichert");
   res.json({ status: "ok" });
 });
 
