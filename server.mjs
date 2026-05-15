@@ -70,13 +70,13 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Starter Fehler:", err);
-    res.status(500).json({ error: "Starter Fehler" });
+    res.json({ starters: [] }); // ✅ nie crashen
   }
 });
 
 
 
-// ================= ✅ ERGEBNISSE (FINAL & STABIL) =================
+// ================= ✅ ERGEBNISSE (FINAL & ROBUST) =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -89,12 +89,31 @@ app.get("/api/results/:raceId", async (req, res) => {
     let winOdds = 0;
     let placeOdds = 0;
 
-    // ✅ 1. ERSTE TABELLE = Ergebnis-Tabelle
-    const table = $("table").first();
+    let resultTable = null;
 
-    table.find("tr").each((_, row) => {
+    // ✅ 1. richtige Tabelle finden (enthält "1.")
+    $("table").each((_, tbl) => {
+      const tableText = $(tbl).text();
 
+      if (
+        tableText.includes("1.") &&
+        tableText.includes("2.") &&
+        tableText.includes("3.")
+      ) {
+        resultTable = $(tbl);
+      }
+    });
+
+    // ✅ Falls keine Tabelle → Rennen noch nicht entschieden
+    if (!resultTable) {
+      console.log("⚠️ Keine Ergebnistabelle gefunden");
+      return res.json({});
+    }
+
+    // ✅ 2. Platzierungen auslesen
+    resultTable.find("tr").each((_, row) => {
       const cells = $(row).find("td");
+
       if (cells.length < 2) return;
 
       const pos = cells.eq(0).text().trim();
@@ -106,19 +125,17 @@ app.get("/api/results/:raceId", async (req, res) => {
       if (pos === "2." || pos === "3.") placed.push(horse);
     });
 
-    // ✅ 2. QUOTEN aus Textblock ziehen
-    const text = $.text().replace(/,/g, ".");
+    // ✅ 3. Quoten aus Textblock (robust!)
+    const fullText = $.text().replace(/,/g, ".");
 
-    const match = text.match(/Quoten zu 1 €:\s*([\d.]+)\s*\/\s*([\d.\/]+)/i);
+    if (fullText.toLowerCase().includes("quoten")) {
 
-    if (match) {
-      // Siegquote
-      winOdds = parseFloat(match[1]) || 0;
+      const part = fullText.split("Quoten")[1] || "";
+      const numbers = part.match(/\d+\.\d+/g) || [];
 
-      // Platzquote (erste Zahl)
-      const parts = match[2].split("/");
-      if (parts.length > 0) {
-        placeOdds = parseFloat(parts[0]) || 0;
+      if (numbers.length >= 2) {
+        winOdds = parseFloat(numbers[0]) || 0;
+        placeOdds = parseFloat(numbers[1]) || 0;
       }
     }
 
@@ -128,11 +145,6 @@ app.get("/api/results/:raceId", async (req, res) => {
       winOdds,
       placeOdds
     });
-
-    // ✅ Wenn kein Ergebnis vorhanden → leer zurückgeben
-    if (!winner) {
-      return res.json({});
-    }
 
     res.json({
       raceId: req.params.raceId,
@@ -144,7 +156,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
   } catch (e) {
     console.error("❌ Ergebnis Fehler:", e);
-    res.status(500).json({ error: "Result Fehler" });
+    res.json({}); // ✅ nie leer ohne response
   }
 });
 
@@ -171,4 +183,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("✅ Server läuft auf Port", PORT);
 });
-``
