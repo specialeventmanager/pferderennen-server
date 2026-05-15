@@ -13,7 +13,6 @@ let savedData = {
   banker: {}
 };
 
-
 // ================= RENNEN =================
 app.get("/api/races", (req, res) => {
   res.json([
@@ -27,7 +26,6 @@ app.get("/api/races", (req, res) => {
     { name: "Rennen 8", id: "1364743" }
   ]);
 });
-
 
 // ================= STARTER =================
 app.get("/api/starters/:raceId", async (req, res) => {
@@ -45,12 +43,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
       if (cells.length > 2) {
         const name = cells.eq(1).text().trim();
 
-        if (
-          name &&
-          name !== "-" &&
-          name.length > 2 &&
-          !starters.includes(name)
-        ) {
+        if (name && name.length > 2 && !starters.includes(name)) {
           starters.push(name);
         }
       }
@@ -58,14 +51,12 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     res.json({ starters });
 
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.json({ starters: [] });
   }
 });
 
-
-// ================= ERGEBNISSE (FINAL FIXED) =================
+// ================= ERGEBNISSE =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -80,7 +71,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle erkennen
+    // ✅ richtige Tabelle finden
     $("table").each((_, tbl) => {
       const firstCell = $(tbl).find("tr td").first().text().trim();
       if (firstCell === "1.") {
@@ -110,18 +101,18 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    // ✅ Text vorbereiten
+    // ✅ TEXT vorbereiten
     const text = $.text().replace(/,/g, ".");
 
-    // ✅ SIEGWETTE (JETZT EXAKT!)
-    const siegMatch = text.match(/Siegwette\s*:\s*([\d.]+)/i);
+    // ✅ FIX 1: Siegquote (kein :)
+    const siegMatch = text.match(/Siegwette\s+([\d.]+)/i);
 
     if (siegMatch) {
       winOdds = parseFloat(siegMatch[1]);
     }
 
-    // ✅ PLATZWETTE (JETZT EXAKT + STOP BEI "-")
-    const platzMatch = text.match(/Platzwette\s*:\s*([0-9./\-]+)/i);
+    // ✅ FIX 2: Platzwette (kein :)
+    const platzMatch = text.match(/Platzwette\s+([0-9./\-]+)/i);
 
     if (platzMatch) {
       const parts = platzMatch[1].split("/");
@@ -139,7 +130,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     }
 
-    console.log("✅ Ergebnis FINAL:", {
+    console.log("✅ FINAL:", {
       winner,
       placed,
       winOdds,
@@ -160,7 +151,6 @@ app.get("/api/results/:raceId", async (req, res) => {
   }
 });
 
-
 // ================= TIPPS =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
@@ -171,7 +161,5 @@ app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
 
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT);
-``
