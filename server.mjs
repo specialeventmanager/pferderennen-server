@@ -15,10 +15,9 @@ let savedData = {
 };
 
 
-
 // ================= ✅ RENNEN =================
 app.get("/api/races", (req, res) => {
-  const races = [
+  res.json([
     { name: "Rennen 1", id: "1364737" },
     { name: "Rennen 2", id: "1367145" },
     { name: "Rennen 3", id: "1364741" },
@@ -27,11 +26,8 @@ app.get("/api/races", (req, res) => {
     { name: "Rennen 6", id: "1364740" },
     { name: "Rennen 7", id: "1364744" },
     { name: "Rennen 8", id: "1364743" }
-  ];
-
-  res.json(races);
+  ]);
 });
-
 
 
 // ================= ✅ STARTER =================
@@ -52,8 +48,8 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
         if (
           name &&
-          name.length > 2 &&
           name !== "-" &&
+          name.length > 2 &&
           !name.match(/^\d+$/) &&
           !starters.includes(name)
         ) {
@@ -66,13 +62,12 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Starter Fehler:", err);
-    res.json({ starters: [] }); // ✅ nie crash
+    res.json({ starters: [] });
   }
 });
 
 
-
-// ================= ✅ ERGEBNISSE (FINAL) =================
+// ================= ✅ ERGEBNISSE (FINAL + FIXED QUOTES) =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -87,15 +82,10 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ 1. Richtige Tabelle finden (enthält 1., 2., 3.)
+    // ✅ richtige Tabelle finden (enthält Ergebnisse)
     $("table").each((_, tbl) => {
       const txt = $(tbl).text();
-
-      if (
-        txt.includes("1.") &&
-        txt.includes("2.") &&
-        txt.includes("3.")
-      ) {
+      if (txt.includes("1.") && txt.includes("2.") && txt.includes("3.")) {
         resultTable = $(tbl);
       }
     });
@@ -104,10 +94,10 @@ app.get("/api/results/:raceId", async (req, res) => {
       return res.json({});
     }
 
-    // ✅ 2. Platzierungen auslesen
+    // ✅ Platzierungen auslesen
     resultTable.find("tr").each((_, row) => {
-
       const cells = $(row).find("td");
+
       if (cells.length < 2) return;
 
       const pos = cells.eq(0).text().trim();
@@ -122,28 +112,36 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    // ✅ 3. Quoten sauber aus Text holen
-    const fullText = $.text().replace(/,/g, ".");
+    // ✅ TEXT für Quoten vorbereiten
+    const text = $.text().replace(/,/g, ".");
 
-    // 👉 Platzquoten
-    const platzMatch = fullText.match(/Platzwette[^:]*:\s*([0-9./\-]+)/i);
-
-    if (platzMatch) {
-      placeOdds = platzMatch[1]
-        .split("/")
-        .map(p => p.trim())
-        .filter(p => p !== "-" && p !== "")
-        .map(p => parseFloat(p));
-    }
-
-    // 👉 Siegquote
-    const siegMatch = fullText.match(/Siegwette[^:]*:\s*([\d.]+)/i);
-
+    // ✅ SIEGWETTE (funktionierte bereits → bleibt gleich)
+    const siegMatch = text.match(/Siegwette[^:]*:\s*([\d.]+)/i);
     if (siegMatch) {
       winOdds = parseFloat(siegMatch[1]) || 0;
     }
 
-    console.log("✅ Ergebnis erkannt:", {
+    // ✅ PLATZWETTE (FIX: STOP bei "-")
+    const platzMatch = text.match(/Platzwette[^:]*:\s*([0-9./\-]+)/i);
+
+    if (platzMatch) {
+      const parts = platzMatch[1].split("/");
+
+      for (let p of parts) {
+        p = p.trim();
+
+        // 👉 WICHTIG: Stop bei "-"
+        if (p === "-" || p === "") break;
+
+        const val = parseFloat(p);
+
+        if (!isNaN(val)) {
+          placeOdds.push(val);
+        }
+      }
+    }
+
+    console.log("✅ Ergebnis:", {
       winner,
       placed,
       winOdds,
@@ -165,7 +163,6 @@ app.get("/api/results/:raceId", async (req, res) => {
 });
 
 
-
 // ================= ✅ TIPPS =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
@@ -175,7 +172,6 @@ app.post("/api/saveTips", (req, res) => {
 app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
-
 
 
 // ================= ✅ SERVER START =================
