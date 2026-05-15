@@ -8,14 +8,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Multiplayer Speicher
+// ================= SPEICHER =================
 let savedData = {
   tips: {},
   banker: {}
 };
 
 
-// ================= ✅ RENNEN =================
+
+// ================= RENNEN =================
 app.get("/api/races", (req, res) => {
   res.json([
     { name: "Rennen 1", id: "1364737" },
@@ -30,7 +31,8 @@ app.get("/api/races", (req, res) => {
 });
 
 
-// ================= ✅ STARTER =================
+
+// ================= STARTER =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -58,16 +60,23 @@ app.get("/api/starters/:raceId", async (req, res) => {
       }
     });
 
-    res.json({ starters });
+    res.json({
+      raceId: req.params.raceId,
+      starters
+    });
 
   } catch (err) {
     console.error("❌ Starter Fehler:", err);
-    res.json({ starters: [] });
+    res.json({
+      raceId: req.params.raceId,
+      starters: []
+    });
   }
 });
 
 
-// ================= ✅ ERGEBNISSE (FINAL + FIXED QUOTES) =================
+
+// ================= ERGEBNISSE =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -82,19 +91,21 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle finden (enthält Ergebnisse)
+    // ✅ richtige Tabelle: erste Zelle = "1."
     $("table").each((_, tbl) => {
-      const txt = $(tbl).text();
-      if (txt.includes("1.") && txt.includes("2.") && txt.includes("3.")) {
+      const firstCell = $(tbl).find("tr td").first().text().trim();
+
+      if (firstCell === "1.") {
         resultTable = $(tbl);
       }
     });
 
     if (!resultTable) {
+      console.log("❌ Keine Ergebnistabelle gefunden");
       return res.json({});
     }
 
-    // ✅ Platzierungen auslesen
+    // ✅ Platzierungen
     resultTable.find("tr").each((_, row) => {
       const cells = $(row).find("td");
 
@@ -112,17 +123,18 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    // ✅ TEXT für Quoten vorbereiten
-    const text = $.text().replace(/,/g, ".");
+    // ✅ Quotenblock sauber isolieren
+    const fullText = $.text().replace(/,/g, ".");
+    const quoteSection = fullText.split("Quoten zu")[1] || "";
 
-    // ✅ SIEGWETTE (funktionierte bereits → bleibt gleich)
-    const siegMatch = text.match(/Siegwette[^:]*:\s*([\d.]+)/i);
+    // ✅ Siegquote
+    const siegMatch = quoteSection.match(/Siegwette[^:]*:\s*([\d.]+)/i);
     if (siegMatch) {
       winOdds = parseFloat(siegMatch[1]) || 0;
     }
 
-    // ✅ PLATZWETTE (FIX: STOP bei "-")
-    const platzMatch = text.match(/Platzwette[^:]*:\s*([0-9./\-]+)/i);
+    // ✅ Platzquoten korrekt (Stop bei "-")
+    const platzMatch = quoteSection.match(/Platzwette[^:]*:\s*([0-9./\-]+)/i);
 
     if (platzMatch) {
       const parts = platzMatch[1].split("/");
@@ -130,7 +142,6 @@ app.get("/api/results/:raceId", async (req, res) => {
       for (let p of parts) {
         p = p.trim();
 
-        // 👉 WICHTIG: Stop bei "-"
         if (p === "-" || p === "") break;
 
         const val = parseFloat(p);
@@ -141,7 +152,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     }
 
-    console.log("✅ Ergebnis:", {
+    console.log("✅ FINAL Ergebnis:", {
       winner,
       placed,
       winOdds,
@@ -163,7 +174,8 @@ app.get("/api/results/:raceId", async (req, res) => {
 });
 
 
-// ================= ✅ TIPPS =================
+
+// ================= TIPPS =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
   res.json({ status: "ok" });
@@ -174,7 +186,8 @@ app.get("/api/loadTips", (req, res) => {
 });
 
 
-// ================= ✅ SERVER START =================
+
+// ================= START =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
