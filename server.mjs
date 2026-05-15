@@ -56,7 +56,6 @@ app.get("/api/starters/:raceId", async (req, res) => {
           name !== "-" &&
           name.length > 2 &&
           !name.match(/^\d+$/) &&
-          !name.toLowerCase().includes("nr") &&
           !starters.includes(name)
         ) {
           starters.push(name);
@@ -77,7 +76,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
 
 
-// ================= ✅ ERGEBNISSE (FINAL FIX) =================
+// ================= ✅ ERGEBNISSE (FINAL & STABIL) =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -90,53 +89,38 @@ app.get("/api/results/:raceId", async (req, res) => {
     let winOdds = 0;
     let placeOdds = 0;
 
-    // ✅ ROBUST: Header unabhängig von Groß-/Kleinschreibung finden
-    let header = $("h3").filter((i, el) => {
-      return $(el).text().toLowerCase().includes("ergebnis");
-    });
+    // ✅ 1. ERSTE TABELLE = Ergebnis-Tabelle
+    const table = $("table").first();
 
-    // ✅ Tabelle danach holen
-    let table = header.next().is("table")
-      ? header.next()
-      : header.nextAll("table").first();
-
-    // ✅ Fallback falls keine Tabelle existiert (Rennen noch läuft)
-    if (!table || table.length === 0) {
-      console.log("⚠️ Kein Ergebnis vorhanden (Rennen läuft evtl.)");
-      return res.json({});
-    }
-
-    // ✅ NUR diese Tabelle parsen
     table.find("tr").each((_, row) => {
 
       const cells = $(row).find("td");
-      if (cells.length < 3) return;
+      if (cells.length < 2) return;
 
       const pos = cells.eq(0).text().trim();
       const horse = cells.eq(1).text().trim();
 
       if (!horse) return;
 
-      // ✅ Sieger
-      if (pos === "1.") {
-        winner = horse;
-
-        // 👉 ganze Zeile analysieren (flexibel!)
-        const text = $(row).text().replace(",", ".");
-        const nums = text.match(/\d+\.\d+/g) || [];
-
-        if (nums.length >= 2) {
-          winOdds = parseFloat(nums[nums.length - 2]) || 0;
-          placeOdds = parseFloat(nums[nums.length - 1]) || 0;
-        }
-      }
-
-      // ✅ Platzierte
-      if (pos === "2." || pos === "3.") {
-        placed.push(horse);
-      }
-
+      if (pos === "1.") winner = horse;
+      if (pos === "2." || pos === "3.") placed.push(horse);
     });
+
+    // ✅ 2. QUOTEN aus Textblock ziehen
+    const text = $.text().replace(/,/g, ".");
+
+    const match = text.match(/Quoten zu 1 €:\s*([\d.]+)\s*\/\s*([\d.\/]+)/i);
+
+    if (match) {
+      // Siegquote
+      winOdds = parseFloat(match[1]) || 0;
+
+      // Platzquote (erste Zahl)
+      const parts = match[2].split("/");
+      if (parts.length > 0) {
+        placeOdds = parseFloat(parts[0]) || 0;
+      }
+    }
 
     console.log("✅ Ergebnis erkannt:", {
       winner,
@@ -144,6 +128,11 @@ app.get("/api/results/:raceId", async (req, res) => {
       winOdds,
       placeOdds
     });
+
+    // ✅ Wenn kein Ergebnis vorhanden → leer zurückgeben
+    if (!winner) {
+      return res.json({});
+    }
 
     res.json({
       raceId: req.params.raceId,
@@ -182,3 +171,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("✅ Server läuft auf Port", PORT);
 });
+``
