@@ -17,9 +17,8 @@ let savedData = {
 
 
 
-// ================= ✅ RICHTIGE RENNEN =================
+// ================= ✅ RENNEN =================
 app.get("/api/races", (req, res) => {
-
   const races = [
     { name: "Rennen 1", id: "1364737" },
     { name: "Rennen 2", id: "1367145" },
@@ -39,8 +38,7 @@ app.get("/api/races", (req, res) => {
 // ================= ✅ STARTER =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
-    const url =
-      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -82,8 +80,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
 // ================= ✅ ERGEBNISSE (FINAL FIX) =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
-    const url =
-      `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
+    const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
@@ -93,17 +90,27 @@ app.get("/api/results/:raceId", async (req, res) => {
     let winOdds = 0;
     let placeOdds = 0;
 
-    // ✅ richtige Tabelle finden (über Überschrift)
-    const header = $("h3:contains('STATUS: ERGEBNIS')");
-    const table = header.nextAll("table").first();
+    // ✅ ROBUST: Header unabhängig von Groß-/Kleinschreibung finden
+    let header = $("h3").filter((i, el) => {
+      return $(el).text().toLowerCase().includes("ergebnis");
+    });
 
-    // ✅ fallback falls Struktur anders ist
-    const targetTable = table.length ? table : $("table").first();
+    // ✅ Tabelle danach holen
+    let table = header.next().is("table")
+      ? header.next()
+      : header.nextAll("table").first();
 
-    targetTable.find("tr").each((_, row) => {
+    // ✅ Fallback falls keine Tabelle existiert (Rennen noch läuft)
+    if (!table || table.length === 0) {
+      console.log("⚠️ Kein Ergebnis vorhanden (Rennen läuft evtl.)");
+      return res.json({});
+    }
+
+    // ✅ NUR diese Tabelle parsen
+    table.find("tr").each((_, row) => {
 
       const cells = $(row).find("td");
-      if (cells.length < 5) return;
+      if (cells.length < 3) return;
 
       const pos = cells.eq(0).text().trim();
       const horse = cells.eq(1).text().trim();
@@ -114,6 +121,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       if (pos === "1.") {
         winner = horse;
 
+        // 👉 ganze Zeile analysieren (flexibel!)
         const text = $(row).text().replace(",", ".");
         const nums = text.match(/\d+\.\d+/g) || [];
 
@@ -130,7 +138,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     });
 
-    console.log("✅ Ergebnis:", {
+    console.log("✅ Ergebnis erkannt:", {
       winner,
       placed,
       winOdds,
