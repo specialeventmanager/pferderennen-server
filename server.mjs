@@ -10,6 +10,7 @@ app.use(express.json());
 
 let savedData = { tips: {}, banker: {} };
 
+
 // ================= RENNEN =================
 app.get("/api/races", (req, res) => {
   res.json([
@@ -23,6 +24,7 @@ app.get("/api/races", (req, res) => {
     { name: "Rennen 8", id: "1364743" }
   ]);
 });
+
 
 // ================= STARTER =================
 app.get("/api/starters/:raceId", async (req, res) => {
@@ -53,6 +55,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
   }
 });
 
+
 // ================= ERGEBNISSE =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
@@ -69,7 +72,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle
+    // ✅ richtige Tabelle finden
     $("table").each((_, tbl) => {
       const firstCell = $(tbl).find("tr td").first().text().trim();
       if (firstCell === "1.") {
@@ -97,7 +100,6 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    // ✅ Text vorbereiten
     const text = $.text().replace(/,/g, ".");
 
     // ✅ Siegquote
@@ -116,9 +118,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
         v = v.trim();
 
-        // ✅ STOP richtig erkannt
-        if (v.includes("-")) break;
-
+        // ✅ zuerst Zahl extrahieren
         const num = v.match(/[\d.]+/);
 
         if (num) {
@@ -127,6 +127,9 @@ app.get("/api/results/:raceId", async (req, res) => {
             placeOdds.push(val);
           }
         }
+
+        // ✅ danach stoppen
+        if (v.includes("-")) break;
       }
     }
 
@@ -150,6 +153,7 @@ app.get("/api/results/:raceId", async (req, res) => {
   }
 });
 
+
 // ================= TIPPS =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
@@ -159,6 +163,7 @@ app.post("/api/saveTips", (req, res) => {
 app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT);
