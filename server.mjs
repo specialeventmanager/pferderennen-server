@@ -43,7 +43,12 @@ app.get("/api/starters/:raceId", async (req, res) => {
       if (cells.length > 2) {
         const name = cells.eq(1).text().trim();
 
-        if (name && name.length > 2 && !starters.includes(name)) {
+        if (
+          name &&
+          name !== "-" &&
+          name.length > 2 &&
+          !starters.includes(name)
+        ) {
           starters.push(name);
         }
       }
@@ -51,7 +56,8 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     res.json({ starters });
 
-  } catch {
+  } catch (err) {
+    console.error("Starter Fehler:", err);
     res.json({ starters: [] });
   }
 });
@@ -71,7 +77,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle finden
+    // ✅ richtige Tabelle erkennen (erste Zelle = "1.")
     $("table").each((_, tbl) => {
       const firstCell = $(tbl).find("tr td").first().text().trim();
       if (firstCell === "1.") {
@@ -79,9 +85,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    if (!resultTable) {
-      return res.json({});
-    }
+    if (!resultTable) return res.json({});
 
     // ✅ Platzierungen
     resultTable.find("tr").each((_, row) => {
@@ -101,36 +105,39 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
-    // ✅ TEXT vorbereiten
+    // ✅ Text vorbereiten
     const text = $.text().replace(/,/g, ".");
 
-    // ✅ FIX 1: Siegquote (kein :)
+    // ✅ Siegquote
     const siegMatch = text.match(/Siegwette\s+([\d.]+)/i);
-
     if (siegMatch) {
       winOdds = parseFloat(siegMatch[1]);
     }
 
-    // ✅ FIX 2: Platzwette (kein :)
-    const platzMatch = text.match(/Platzwette\s+([0-9./\-]+)/i);
+    // ✅ ✅ FINALER FIX: Platzquoten KOMPLETT auslesen
+    const platzBlock = text.match(/Platzwette\s+([^\n]+)/i);
 
-    if (platzMatch) {
-      const parts = platzMatch[1].split("/");
+    if (platzBlock) {
+      const values = platzBlock[1].split("/");
 
-      for (let p of parts) {
-        p = p.trim();
+      for (let v of values) {
+        v = v.trim();
 
-        if (p === "-" || p === "") break;
+        // STOP bei "-"
+        if (v.startsWith("-")) break;
 
-        const val = parseFloat(p);
+        const num = v.match(/[\d.]+/);
 
-        if (!isNaN(val)) {
-          placeOdds.push(val);
+        if (num) {
+          const val = parseFloat(num[0]);
+          if (!isNaN(val)) {
+            placeOdds.push(val);
+          }
         }
       }
     }
 
-    console.log("✅ FINAL:", {
+    console.log("✅ RESULT:", {
       winner,
       placed,
       winOdds,
@@ -146,7 +153,7 @@ app.get("/api/results/:raceId", async (req, res) => {
     });
 
   } catch (e) {
-    console.error(e);
+    console.error("Ergebnis Fehler:", e);
     res.json({});
   }
 });
@@ -161,5 +168,9 @@ app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
 
+// ================= SERVER START =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT);
+
+app.listen(PORT, () => {
+  console.log("Server läuft auf Port", PORT);
+});
