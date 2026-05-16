@@ -10,7 +10,6 @@ app.use(express.json());
 
 let savedData = { tips: {}, banker: {} };
 
-
 // ================= RENNEN =================
 app.get("/api/races", (req, res) => {
   res.json([
@@ -26,7 +25,7 @@ app.get("/api/races", (req, res) => {
 });
 
 
-// ================= STARTER =================
+// ================= ✅ STARTER (FIXED!) =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
@@ -36,13 +35,22 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     const starters = [];
 
-    $("table tr").each((_, row) => {
+    // ✅ NUR erste Tabelle verwenden
+    const table = $("table").first();
+
+    table.find("tr").each((_, row) => {
       const cells = $(row).find("td");
 
       if (cells.length > 2) {
         const name = cells.eq(1).text().trim();
 
-        if (name && name.length > 2 && !starters.includes(name)) {
+        if (
+          name &&
+          name !== "-" &&
+          name.length > 2 &&
+          !name.match(/^\d+$/) &&
+          !starters.includes(name)
+        ) {
           starters.push(name);
         }
       }
@@ -50,7 +58,8 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     res.json({ starters });
 
-  } catch {
+  } catch (err) {
+    console.error("Starter Fehler:", err);
     res.json({ starters: [] });
   }
 });
@@ -72,7 +81,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle finden
+    // ✅ richtige Tabelle (Ergebnis)
     $("table").each((_, tbl) => {
       const firstCell = $(tbl).find("tr td").first().text().trim();
       if (firstCell === "1.") {
@@ -100,6 +109,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     });
 
+    // ✅ Text vorbereiten
     const text = $.text().replace(/,/g, ".");
 
     // ✅ Siegquote
@@ -108,7 +118,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       winOdds = parseFloat(siegMatch[1]);
     }
 
-    // ✅ Platzquoten (FINAL FIX)
+    // ✅ Platzquoten (FINAL)
     const platzBlock = text.match(/Platzwette\s+([^\n]+)/i);
 
     if (platzBlock) {
@@ -118,9 +128,8 @@ app.get("/api/results/:raceId", async (req, res) => {
 
         v = v.trim();
 
-        // ✅ zuerst Zahl extrahieren
+        // ✅ erst Zahl nehmen
         const num = v.match(/[\d.]+/);
-
         if (num) {
           const val = parseFloat(num[0]);
           if (!isNaN(val)) {
@@ -128,7 +137,7 @@ app.get("/api/results/:raceId", async (req, res) => {
           }
         }
 
-        // ✅ danach stoppen
+        // ✅ dann STOP
         if (v.includes("-")) break;
       }
     }
@@ -148,7 +157,8 @@ app.get("/api/results/:raceId", async (req, res) => {
       placeOdds
     });
 
-  } catch {
+  } catch (e) {
+    console.error(e);
     res.json({});
   }
 });
@@ -165,5 +175,8 @@ app.get("/api/loadTips", (req, res) => {
 });
 
 
+// ================= SERVER START =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT);
+app.listen(PORT, () => {
+  console.log("Server läuft auf Port", PORT);
+});
