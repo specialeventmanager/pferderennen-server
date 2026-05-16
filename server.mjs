@@ -8,10 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-let savedData = {
-  tips: {},
-  banker: {}
-};
+let savedData = { tips: {}, banker: {} };
 
 // ================= RENNEN =================
 app.get("/api/races", (req, res) => {
@@ -43,12 +40,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
       if (cells.length > 2) {
         const name = cells.eq(1).text().trim();
 
-        if (
-          name &&
-          name !== "-" &&
-          name.length > 2 &&
-          !starters.includes(name)
-        ) {
+        if (name && name.length > 2 && !starters.includes(name)) {
           starters.push(name);
         }
       }
@@ -56,8 +48,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
 
     res.json({ starters });
 
-  } catch (err) {
-    console.error("Starter Fehler:", err);
+  } catch {
     res.json({ starters: [] });
   }
 });
@@ -65,6 +56,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
 // ================= ERGEBNISSE =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
+
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
@@ -77,7 +69,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle erkennen (erste Zelle = "1.")
+    // ✅ richtige Tabelle
     $("table").each((_, tbl) => {
       const firstCell = $(tbl).find("tr td").first().text().trim();
       if (firstCell === "1.") {
@@ -114,17 +106,18 @@ app.get("/api/results/:raceId", async (req, res) => {
       winOdds = parseFloat(siegMatch[1]);
     }
 
-    // ✅ ✅ FINALER FIX: Platzquoten KOMPLETT auslesen
+    // ✅ Platzquoten (FINAL FIX)
     const platzBlock = text.match(/Platzwette\s+([^\n]+)/i);
 
     if (platzBlock) {
       const values = platzBlock[1].split("/");
 
       for (let v of values) {
+
         v = v.trim();
 
-        // STOP bei "-"
-        if (v.startsWith("-")) break;
+        // ✅ STOP richtig erkannt
+        if (v.includes("-")) break;
 
         const num = v.match(/[\d.]+/);
 
@@ -137,7 +130,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       }
     }
 
-    console.log("✅ RESULT:", {
+    console.log("✅ FINAL:", {
       winner,
       placed,
       winOdds,
@@ -152,8 +145,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       placeOdds
     });
 
-  } catch (e) {
-    console.error("Ergebnis Fehler:", e);
+  } catch {
     res.json({});
   }
 });
@@ -168,9 +160,5 @@ app.get("/api/loadTips", (req, res) => {
   res.json(savedData);
 });
 
-// ================= SERVER START =================
 const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Server läuft auf Port", PORT);
-});
+app.listen(PORT);
