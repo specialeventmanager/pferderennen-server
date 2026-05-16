@@ -10,7 +10,8 @@ app.use(express.json());
 
 let savedData = { tips: {}, banker: {} };
 
-// ================= RENNEN =================
+
+// ================= ✅ RENNEN =================
 app.get("/api/races", (req, res) => {
   res.json([
     { name: "Rennen 1", id: "1364737" },
@@ -25,34 +26,42 @@ app.get("/api/races", (req, res) => {
 });
 
 
-// ================= ✅ STARTER (FIXED!) =================
+// ================= ✅ STARTER (FINAL FIX) =================
 app.get("/api/starters/:raceId", async (req, res) => {
   try {
+
     const url = `https://www.deutscher-galopp.de/gr/renntage/rennen.php?id=${req.params.raceId}&d=20260514&s=S`;
 
     const html = await fetch(url).then(r => r.text());
     const $ = cheerio.load(html);
 
     const starters = [];
+    let starterTable = null;
 
-    // ✅ NUR erste Tabelle verwenden
-    const table = $("table").first();
+    // ✅ richtige Tabelle: enthält viele Pferde-Links
+    $("table").each((_, tbl) => {
+      const horseLinks = $(tbl).find("a[href*='/pferd'], a[href*='/pferde']");
 
-    table.find("tr").each((_, row) => {
-      const cells = $(row).find("td");
+      if (horseLinks.length > 5) {
+        starterTable = $(tbl);
+      }
+    });
 
-      if (cells.length > 2) {
-        const name = cells.eq(1).text().trim();
+    if (!starterTable) {
+      return res.json({ starters: [] });
+    }
 
-        if (
-          name &&
-          name !== "-" &&
-          name.length > 2 &&
-          !name.match(/^\d+$/) &&
-          !starters.includes(name)
-        ) {
-          starters.push(name);
-        }
+    // ✅ Pferdenamen extrahieren
+    starterTable.find("tr").each((_, row) => {
+      const link = $(row).find("a[href*='/pferd'], a[href*='/pferde']").first();
+      const name = link.text().trim();
+
+      if (
+        name &&
+        name.length > 2 &&
+        !starters.includes(name)
+      ) {
+        starters.push(name);
       }
     });
 
@@ -65,7 +74,7 @@ app.get("/api/starters/:raceId", async (req, res) => {
 });
 
 
-// ================= ERGEBNISSE =================
+// ================= ✅ ERGEBNISSE (KORREKT) =================
 app.get("/api/results/:raceId", async (req, res) => {
   try {
 
@@ -81,7 +90,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
     let resultTable = null;
 
-    // ✅ richtige Tabelle (Ergebnis)
+    // ✅ richtige Tabelle erkennen
     $("table").each((_, tbl) => {
       const firstCell = $(tbl).find("tr td").first().text().trim();
       if (firstCell === "1.") {
@@ -118,7 +127,7 @@ app.get("/api/results/:raceId", async (req, res) => {
       winOdds = parseFloat(siegMatch[1]);
     }
 
-    // ✅ Platzquoten (FINAL)
+    // ✅ Platzquoten (FINAL & korrekt)
     const platzBlock = text.match(/Platzwette\s+([^\n]+)/i);
 
     if (platzBlock) {
@@ -128,7 +137,7 @@ app.get("/api/results/:raceId", async (req, res) => {
 
         v = v.trim();
 
-        // ✅ erst Zahl nehmen
+        // ✅ zuerst Zahl extrahieren
         const num = v.match(/[\d.]+/);
         if (num) {
           const val = parseFloat(num[0]);
@@ -137,7 +146,7 @@ app.get("/api/results/:raceId", async (req, res) => {
           }
         }
 
-        // ✅ dann STOP
+        // ✅ DANN STOP (wichtig!)
         if (v.includes("-")) break;
       }
     }
@@ -158,13 +167,13 @@ app.get("/api/results/:raceId", async (req, res) => {
     });
 
   } catch (e) {
-    console.error(e);
+    console.error("Ergebnis Fehler:", e);
     res.json({});
   }
 });
 
 
-// ================= TIPPS =================
+// ================= ✅ TIPPS =================
 app.post("/api/saveTips", (req, res) => {
   savedData = req.body;
   res.json({ status: "ok" });
@@ -175,8 +184,10 @@ app.get("/api/loadTips", (req, res) => {
 });
 
 
-// ================= SERVER START =================
+// ================= ✅ SERVER START =================
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log("Server läuft auf Port", PORT);
+  console.log("✅ Server läuft auf Port", PORT);
 });
+``
